@@ -16,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef DualCrysCalDigi_H
-#define DualCrysCalDigi_H
+#ifndef DUALCRYSCALDIGI_H
+#define DUALCRYSCALDIGI_H
 
 #include "Gaudi/Property.h"
 #include "edm4hep/CaloHitContributionCollection.h"
@@ -37,52 +37,61 @@
 #include <string>
 #include <vector>
 
-
-// inside the <> for the multitransformer, the structure is
-// <output type ( input type ), baseclass template >
-// so CalorimeterHitCollection and CaloHitSimCaloHitLink Collection are the output types
-// SimCalorimeterHit Collection& is the base class for these?
-// and somehow the baseclass template is not used
+/**
+ * @brief Digitization algorithm for Dual Crystal Calorimeter.
+ *
+ * Converts SimCalorimeterHitCollection into CalorimeterHitCollection
+ * and CaloHitSimCaloHitLinkCollection using calibration parameters.
+ *
+ * @author (Your Name)
+ */
 struct DualCrysCalDigi final
     : k4FWCore::MultiTransformer<
           std::tuple<edm4hep::CalorimeterHitCollection, edm4hep::CaloHitSimCaloHitLinkCollection>(
               const edm4hep::SimCalorimeterHitCollection&, const edm4hep::EventHeaderCollection&)> {
+
   DualCrysCalDigi(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
-  //StatusCode finalize() override;
 
   std::tuple<edm4hep::CalorimeterHitCollection, edm4hep::CaloHitSimCaloHitLinkCollection> operator()(
       const edm4hep::SimCalorimeterHitCollection& simCaloHits,
       const edm4hep::EventHeaderCollection&       headers) const override;
 
 private:
-
+  // Input and output collection names
   Gaudi::Property<std::string> m_CalCollections{this, "calCollections", "DRCNoSegment",
-                                                 "The input collection of calorimeters"};
+                                                "The input collection of calorimeter hits"};
   Gaudi::Property<std::string> outputRelCollection{this, "outputRelCollection", "outputRelCollection",
                                                    "The output collection of relations"};
   Gaudi::Property<std::string> outputCalCollection{this, "outputCalCollection", "outputCalCollection",
-                                                    "The output collection of calorimeters"};
+                                                   "The output collection of calorimeter hits"};
+
+  // Geometry and cellID handling
   Gaudi::Property<std::string> m_encodingStringVariable{
       this, "EncodingStringParameterName", "GlobalTrackerReadoutID",
-      "The name of the DD4hep constant that contains the Encoding string for tracking detectors"};
-                                                   "Name of the part of the cellID that holds the layer"};
-  Gaudi::Property<float>       m_thresholdCal{this, "CalThreshold", {0.025}, "Threshold for calorimeters"};
-  Gaudi::Property<float>       m_calibrCoeffCal{
-      this, "calibrationCoeffcal", {120000.0}, "Callibration coefficient of calorimeters"};
-  Gaudi::Property<float> m_maxHitEnergyCal{this, "maxCalHitEnergy", {2.0}, "Threshold for maximum cal hit energy"};
-  Gaudi::Property<std::string> m_detectorNameEcal{this, "detectornameEcal", "DRCrystal", "Name of ECAL"};
+      "The name of the DD4hep constant containing the encoding string"};
+
+  // Calibration and thresholds
+  Gaudi::Property<float> m_thresholdCal{this, "CalThreshold", 0.025f, "Energy threshold for calorimeter hits"};
+  Gaudi::Property<float> m_calibrCoeffCal{this, "calibrationCoeffcal", 120000.0f,
+                                          "Calibration coefficient for calorimeter"};
+  Gaudi::Property<float> m_maxHitEnergyCal{this, "maxCalHitEnergy", 2.0f,
+                                           "Maximum energy considered for a calorimeter hit"};
+
+  // Detector names
+  Gaudi::Property<std::string> m_detectorNameEcal{this, "detectornameEcal", "DRCrystal",
+                                                  "Name of the ECAL detector"};
   Gaudi::Property<std::string> m_detectorNameHcal{this, "detectornameHcal", "DRFtubeFiber",
-                                                    "Name of HCAL"};
+                                                  "Name of the HCAL detector"};
 
-  std::string              m_collName;
+  // Internal variables
+  std::string m_collName;
 
-  SmartIF<IGeoSvc>         m_geoSvc;
+  SmartIF<IGeoSvc> m_geoSvc;
   SmartIF<IUniqueIDGenSvc> m_uidSvc;
-
-
-
 };
+
 DECLARE_COMPONENT(DualCrysCalDigi)
-#endif
+
+#endif // DUALCRYSCALDIGI_H
