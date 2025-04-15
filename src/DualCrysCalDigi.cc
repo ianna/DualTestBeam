@@ -18,102 +18,111 @@
  */
 
 #include <cctype>
-#include <cstdlib>  // abs
+#include <cstdlib>  // for std::abs
+
 #include "DD4hep/DD4hepUnits.h"
 #include "DD4hep/Detector.h"
 #include "DDRec/DetectorData.h"
 #include "GaudiKernel/MsgStream.h"
+
 #include "edm4hep/CalorimeterHit.h"
-#include "DualCrysCalorimeterHit.h"
 #include "edm4hep/Constants.h"
+#include "edm4hep/SimCalorimeterHit.h"
+
 #include "DualCrysCalDigi.h"
+#include "DualCrysCalorimeterHit.h"
 
 DECLARE_COMPONENT(DualCrysCalDigi)
 
 DualCrysCalDigi::DualCrysCalDigi(const std::string& aName, ISvcLocator* aSvcLoc)
-    : MultiTransformer(aName, aSvcLoc,
-                       {
-                           KeyValues("CALCollection", {"ECalEcalCollection"}),
-                           KeyValues("HeaderName", {"EventHeader"}),
-                       },
-                       {KeyValues("CALOutputCollections", {"CalorimeterHit"}),
-                        KeyValues("RelationOutputCollection", {"RelationCalHit"})}) {
+    : MultiTransformer(
+          aName, aSvcLoc,
+          {
+              KeyValues("CALCollection", {"ECalEcalCollection"}),
+              KeyValues("HeaderName", {"EventHeader"}),
+          },
+          {
+              KeyValues("CALOutputCollections", {"CalorimeterHit"}),
+              KeyValues("RelationOutputCollection", {"RelationCalHit"})
+          }) {
   m_uidSvc = service<IUniqueIDGenSvc>("UniqueIDGenSvc", true);
   if (!m_uidSvc) {
     error() << "Unable to get UniqueIDGenSvc" << endmsg;
   }
 
-  m_geoSvc = serviceLocator()->service("GeoSvc");  // important to initialize m_geoSvc
+  m_geoSvc = serviceLocator()->service("GeoSvc");
+  if (!m_geoSvc) {
+    error() << "Unable to locate GeoSvc" << endmsg;
+  }
 }
 
 StatusCode DualCrysCalDigi::initialize() {
   return StatusCode::SUCCESS;
 }
 
-std::tuple<edm4hep::CalorimeterHitCollection, edm4hep::CaloHitSimCaloHitLinkCollection> DualCrysCalDigi::operator()(
-    const edm4hep::SimCalorimeterHitCollection& SimCaloHits, const edm4hep::EventHeaderCollection& headers) const {
-  debug() << " process event : " << headers[0].getEventNumber() << " - run  " << headers[0].getRunNumber()
-          << endmsg;  // headers[0].getRunNumber(),headers[0].getEventNumber()
+std::tuple<edm4hep::CalorimeterHitCollection, edm4hep::CaloHitSimCaloHitLinkCollection>
+DualCrysCalDigi::operator()(const edm4hep::SimCalorimeterHitCollection& simCaloHits,
+                            const edm4hep::EventHeaderCollection&       headers) const {
+  debug() << "Processing event: " << headers[0].getEventNumber()
+          << " - run: " << headers[0].getRunNumber() << endmsg;
 
-  auto calcol    = edm4hep::CalorimeterHitCollection();
-  auto calRelcol = edm4hep::CaloHitSimCaloHitLinkCollection();
+  edm4hep::CalorimeterHitCollection calHits;
+  edm4hep::CaloHitSimCaloHitLinkCollection relLinks;
 
-  std::string initString;
-
-  std::string colName    = m_calCollections;
+  std::string colName = m_CalCollections.value();
   CHT::Layout caloLayout = layoutFromString(colName);
 
+  std::string encodingString = m_geoSvc->constantAsString(m_encodingStringVariable.value());
+  dd4hep::DDSegmentation::BitFieldCoder bitFieldCoder(encodingString);
 
-  initString = m_geoSvc->constantAsString(m_encodingStringVariable.value());
-  dd4hep::DDSegmentation::BitFieldCoder bitFieldCoder(initString);  // check!
+  for (const auto& simHit : simCaloHits) {
+    const int cellID = simHit.getCellID();
+    const float energy = simHit.getEnergy();
 
-
-  for (const auto& hit : SimCaloHits) {
-    const int cellID = hit.getCellID();
-    float     energy = hit.getEnergy();
-    //Get the layer number
     unsigned int layer = bitFieldCoder.get(cellID, "layer");
-    //Check if we want to use this later, else go to the next hit
-    if (!useLayer(caloLayout, layer))
+
+    if (!useLayer(caloLayout, layer)) {
       continue;
-    //Do the digitalization
-    float calibr_coeff = 1.;
-    calibr_coeff       = m_calibrCoeffCal;
-    float hitEnergy    = calibr_coeff * energy;
-    if (hitEnergy > m_maxHitEnergyCal) {
-      hitEnergy = m_maxHitEnergyCal;
     }
-    if (hitEnergy > m_thresholdCal) {
-      edm4hep::MutableCalorimeterHit calHit = calcol.create();
+
+    float calibratedEnergy = m_calibrCoeffCal.value() * energy;
+    if (calibratedEnergy > m_maxHitEnergyCal.value()) {
+      calibratedEnergy = m_maxHitEnergyCal.value();
+    }
+
+    if (calibratedEnergy > m_thresholdCal.value()) {
+      edm4hep::MutableCalorimeterHit calHit = calHits.create();
       calHit.setCellID(cellID);
-      calHit.setEnergy(hitEnergy);
-      calHit.setPosition(hit.getPosition());
+      calHit.setEnergy(calibratedEnergy);
+      calHit.setPosition(simHit.getPosition());
       calHit.setType(CHT(CHT::muon, CHT::yoke, caloLayout, layer));
-      auto muonRel = muonRelcol.create();
-      muonRel.setFrom(calHit);
-      muonRel.setTo(hit);
+
+      auto link = relLinks.create();
+      link.setFrom(calHit);
+      link.setTo(simHit);
     }
   }
 
-  return std::make_tuple(std::move(calcol), std::move(calRelcol));
+  return std::make_tuple(std::move(calHits), std::move(relLinks));
 }
 
-//StatusCode DualCrysCalDigi::finalize() { return StatusCode::SUCCESS; }
+// StatusCode DualCrysCalDigi::finalize() { return StatusCode::SUCCESS; }
 
-//If the vectors are empty, we are keeping everything
 bool DualCrysCalDigi::useLayer(CHT::Layout caloLayout, unsigned int layer) const {
   switch (caloLayout) {
     case CHT::ecal:
-      if (layer > m_useLayersEcalVec.size() || m_useLayersEcalVec.size() == 0)
+      if (m_useLayersEcalVec.empty() || layer >= m_useLayersEcalVec.size()) {
         return true;
-      return m_useLayersEcalVec[layer];  //break not needed, because of return
+      }
+      return m_useLayersEcalVec[layer];
+
     case CHT::hcal:
-      if (layer > m_useLayersHcalVec.size() || m_useLayersHcalVec.size() == 0)
+      if (m_useLayersHcalVec.empty() || layer >= m_useLayersHcalVec.size()) {
         return true;
-      return m_useLayersHcalVec[layer];  //break not needed, because of return
-      //For all other cases, always keep the hit
+      }
+      return m_useLayersHcalVec[layer];
+
     default:
       return true;
   }
-}  //useLayer
-
+}
