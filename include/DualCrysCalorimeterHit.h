@@ -10,150 +10,122 @@
 // Author     : M.Frank
 //
 //==========================================================================
-#ifndef EXAMPLES_DDDualCrys_SRC_DualCrysCalorimeterHIT_H
-#define EXAMPLES_DDDualCrys_SRC_DualCrysCalorimeterHIT_H
+#ifndef EXAMPLES_DDDUALCRYS_SRC_DUALCRYSCALORIMETERHIT_H
+#define EXAMPLES_DDDUALCRYS_SRC_DUALCRYSCALORIMETERHIT_H
 
 /// Framework include files
 #include "DDG4/Geant4Data.h"
 #include "G4OpticalPhoton.hh"
 #include "G4VProcess.hh"
 
+#include <array>
+#include <vector>
+
+#include "Math/Vector3D.h"
 
 typedef ROOT::Math::XYZVector Position;
 typedef ROOT::Math::XYZVector Direction;
 
-
-
 namespace CalVision {
 
-
-
-  const int finenbin=40;
-  const int coarsenbin=4;
-
-
-    //const int truthnbin=1000;
+  /// Constants for binning
+  static constexpr int finenbin = 40;
+  static constexpr int coarsenbin = 4;
 
   /// This is the hit definition.
-  /** I took here the same definition of the default Geant4Tracker class,
-   *  (see DDG4/Geant4Data.h)  but it could be anything else as well.
+  /**
+   * Based on the Geant4Tracker class in DDG4/Geant4Data.h.
    *
-   *  Please note:
-   *  ============
-   *  The MC truth handling as implemented in the Geant4ParticleHandler
-   *  will not work with this class if the object(s) are saved with 
-   *  the standard Geant4Output2ROOT event action. If the hit is 
-   *  specialized, the output writing also must be specialized if
-   *  MC truth handling should be supported.
-   *  Otherwise it is sufficient to provide a ROOT dictionary as long as the
-   *  base class dd4hep::sim::Geant4HitData is kept.
+   * ⚠️ Note:
+   * If MC truth handling is required, the standard Geant4Output2ROOT
+   * event action won't work. Custom output writing is required.
    *
-   *  \author  M.Frank
-   *  \version 1.0
-   *  \ingroup DD4HEP_SIMULATION
+   * \author  M.Frank
+   * \version 1.0
+   * \ingroup DD4HEP_SIMULATION
    */
-  class DualCrysCalorimeterHit : public dd4hep::sim::Geant4Calorimeter::Hit   {
+  class DualCrysCalorimeterHit : public dd4hep::sim::Geant4Calorimeter::Hit {
 
   public:
-    int n_inelastic;
-    int ncerenkov,nscintillator;
-    float edeprelativistic;
-    float edepepgam;
-    float wavelenmin=300;
-    float wavelenmax=1000;
+    // Photon and energy data
+    int n_inelastic = 0;
+    int ncerenkov = 0;
+    int nscintillator = 0;
+    float edeprelativistic = 0.0f;
+    float edepepgam = 0.0f;
 
+    // Wavelength and time window
+    float wavelenmin = 300.0f;
+    float wavelenmax = 1000.0f;
+    float timemin = 0.0f;
+    float timemax = 400.0f;
+    float timemaxz = 40.0f;
 
-    int nfinebin=finenbin;
-    float timemin=0;
-    float timemax=400;
-    float timemaxz=40;
-    //    std::array<int,finenbin>  ncerwave;
-    // std::array<int,finenbin> nscintwave;
-    std::array<int,finenbin>  ncertime;
-    std::array<int,finenbin> nscinttime;
-    std::array<int,finenbin>  ncertimez;
-    std::array<int,finenbin> nscinttimez;
-    std::array<float,finenbin> edeptime;
-    std::array<float,finenbin> ereldeptime;
-    float xmax=10;
-    float ymax=10;
-    float xmin=-10;
-    float ymin=-10;
-    int ncoarsebin=coarsenbin;
-    // std::array<std::array<int,coarsenbin>,coarsenbin> cerhitpos;
-    //std::array<std::array<int,coarsenbin>,coarsenbin> scinthitpos;
+    // Fine time binning
+    std::array<int, finenbin> ncertime{};
+    std::array<int, finenbin> nscinttime{};
+    std::array<int, finenbin> ncertimez{};
+    std::array<int, finenbin> nscinttimez{};
+    std::array<float, finenbin> edeptime{};
+    std::array<float, finenbin> ereldeptime{};
 
+    // Hit position space
+    float xmax = 10.0f, ymax = 10.0f;
+    float xmin = -10.0f, ymin = -10.0f;
 
+    // Coarse binning — placeholder for future use
+    int ncoarsebin = coarsenbin;
 
-
-    //int ntruthbin=truthnbin;
-    //std::array<float,truthnbin> contribBeta;
-    //std::array<float,truthnbin> contribCharge;
+    // MC truth contribution vectors
     std::vector<float> contribBeta;
     std::vector<float> contribCharge;
-
 
   public:
     /// Default constructor
     DualCrysCalorimeterHit() = default;
-    /// Initializing constructor
-    DualCrysCalorimeterHit(const Position& cell_pos):dd4hep::sim::Geant4Calorimeter::Hit(cell_pos),ncerenkov(0),nscintillator(0),edeprelativistic(0.),n_inelastic(0),edepepgam(0.) {
 
-
-      for( int i=0;i<finenbin;i++){
-        //ncerwave[i]=0;
-        //nscintwave[i]=0;
-        ncertime[i]=0;
-        nscinttime[i]=0;
-        ncertimez[i]=0;
-        nscinttimez[i]=0;
-	edeptime[i]=0.;
-	ereldeptime[i]=0.;
-      }
-      //      for( int i=0;i<coarsenbin;i++ ) {
-      //  for( int j=0;j<coarsenbin;j++ ) {
-      //    cerhitpos[i][j]=0;
-      //    scinthitpos[i][j]=0;
-      //  }
-      // }
-
-}
+    /// Constructor with position
+    explicit DualCrysCalorimeterHit(const Position& cell_pos)
+        : dd4hep::sim::Geant4Calorimeter::Hit(cell_pos) {
+      ncertime.fill(0);
+      nscinttime.fill(0);
+      ncertimez.fill(0);
+      nscinttimez.fill(0);
+      edeptime.fill(0.0f);
+      ereldeptime.fill(0.0f);
+    }
 
     /// Default destructor
     virtual ~DualCrysCalorimeterHit() = default;
-    /// Assignment operator
-    //DualCrysCalorimeterHit& operator=(const DualCrysCalorimeterHit& c);
+
+    // Defaulted copy/move operations
+    DualCrysCalorimeterHit(const DualCrysCalorimeterHit&) = default;
+    DualCrysCalorimeterHit& operator=(const DualCrysCalorimeterHit&) = default;
+    DualCrysCalorimeterHit(DualCrysCalorimeterHit&&) = default;
+    DualCrysCalorimeterHit& operator=(DualCrysCalorimeterHit&&) = default;
   };
 
-  /// Helper to dump data file
-  /**
-   *  Usage:  
-   *  $> root.exe
-   *  ....
-   *  root [0] gSystem->Load("libDDG4Plugins.so");
-   *  root [1] gSystem->Load("libDDG4_MySensDet.so");
-   *  root [2] CalVision::Dump::dumpData(<num-ebents>,<file-name>);
-   *
-   */
-  class Dump   {
+
+  /// Helper class for ROOT data dumping
+  class Dump {
   public:
-    /// Standalone function to dump data from a root file
+    /// Dump data from a ROOT file
     static int DualCrysCalorimeterdumpData(int num_evts, const char* file_name);
   };
-}
 
-// CINT configuration
+} // namespace CalVision
+
+// CINT/ROOTCLING dictionary configuration
 #if defined(__CINT__) || defined(__MAKECINT__) || defined(__CLING__) || defined(__ROOTCLING__)
 #pragma link off all globals;
 #pragma link off all classes;
 #pragma link off all functions;
 
-/// Define namespaces
 #pragma link C++ namespace dd4hep;
 #pragma link C++ namespace dd4hep::sim;
 #pragma link C++ namespace CalVision;
-#pragma link C++ class     CalVision::DualCrysCalorimeterHit+;
-#pragma link C++ class     CalVision::DualCrysCalorimeterDump;
+#pragma link C++ class CalVision::DualCrysCalorimeterHit+;
+#pragma link C++ class CalVision::Dump+;
 #endif
 
-#endif // EXAMPLES_DDDualCrys_SRC_DualCrysCalorimeterHIT_H
+#endif // EXAMPLES_DDDUALCRYS_SRC_DUALCRYSCALORIMETERHIT_H
